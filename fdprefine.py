@@ -7,6 +7,26 @@ import subprocess
 
 os.system("module load phenix")
 
+def wavelength_to_eV(wavelength):
+    h = 6.62607015e-34
+    c = 2.99792458e8
+    eV = 1.602176634e-19
+    energyeV = (h * c) / (float(wavelength) * 1e-10) / eV
+    return energyeV
+
+def lookup_fprime(energy, element):
+    lookupPath = os.path.join("lookup", f"{element}.dat")
+    closestEnergy = None
+    closestValues = None
+    with open(lookupPath, 'r') as lookupFile:
+        for line in lookupFile:
+            parts = line.split()
+            currentEnergy, fPrime, fDoublePrime = map(float, parts)
+            if closestEnergy is None or abs(energy - currentEnergy) < abs(energy - closestEnergy):
+                closestEnergy = currentEnergy
+                closestValues = (fPrime, fDoublePrime)
+    return closestValues
+
 # pdbIn = input("File location for PDB: ")
 # seqIn = input("File location for SEQ: ")
 # projIn = input("Name of project: ")
@@ -106,68 +126,79 @@ with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.ef
 
 subprocess.run(["phenix.refine", "bposEffParam.eff"])
   
-# create fdp eff file
-with open('fdpEffParam.eff', 'w') as file:
-  file.write(f'''refinement {{  
-  crystal_symmetry {{
-    unit_cell = {unit_cell_strip}
-    space_group = {space_group}
-  }}  
-  input {{  
-    pdb {{  
-      file_name = "{projIn}_bpos_1.pdb"  
+elements = ["Cl", "Ca", "K", "Mg"]
+
+for element in elements:
+  energy = wavelength_to_eV(WV)
+  fPrimeDoublePrime = lookup_fprime(energy, element)
+  with open(f'fdpEffParam_{element}.eff', 'w') as file:
+    file.write(f'''refinement {{  
+    crystal_symmetry {{
+      unit_cell = {unit_cell_strip}
+      space_group = {space_group}
     }}  
-    xray_data {{  
-      file_name = "{mtzIn}"
-      labels = I(+),SIGI(+),I(-),SIGI(-)
-      r_free_flags {{  
+    input {{  
+      pdb {{  
+        file_name = "{projIn}_bpos_1.pdb"  
+      }}  
+      xray_data {{  
         file_name = "{mtzIn}"
-        label = FreeR_flag  
-        test_flag_value = 0  
+        labels = I(+),SIGI(+),I(-),SIGI(-)
+        r_free_flags {{  
+          file_name = "{mtzIn}"
+          label = FreeR_flag  
+          test_flag_value = 0  
+        }}  
+      }}  
+      sequence {{  
+        file_name = "{seqIn}"  
       }}  
     }}  
-    sequence {{  
-      file_name = "{seqIn}"  
+    output {{  
+      prefix = """{projIn}_fdp"""  
+      job_title = """{projIn}"""  
+      serial_format = "%d"
+      write_def_file = False  
     }}  
-  }}  
-  output {{  
-    prefix = """{projIn}_fdp"""  
-    job_title = """{projIn}"""  
-    serial_format = "%d"
-    write_def_file = False  
-  }}  
-  electron_density_maps {{  
-    map_coefficients {{  
-      map_type = 2mFo-DFc  
-      mtz_label_amplitudes = 2FOFCWT  
-      mtz_label_phases = PH2FOFCWT  
-      fill_missing_f_obs = True  
+    electron_density_maps {{  
+      map_coefficients {{  
+        map_type = 2mFo-DFc  
+        mtz_label_amplitudes = 2FOFCWT  
+        mtz_label_phases = PH2FOFCWT  
+        fill_missing_f_obs = True  
+      }}  
+      map_coefficients {{  
+        map_type = 2mFo-DFc  
+        mtz_label_amplitudes = 2FOFCWT_no_fill  
+        mtz_label_phases = PH2FOFCWT_no_fill  
+      }}  
+      map_coefficients {{  
+        map_type = mFo-DFc  
+        mtz_label_amplitudes = FOFCWT  
+        mtz_label_phases = PHFOFCWT  
+      }}  
+      map_coefficients {{  
+        map_type = anomalous  
+        mtz_label_amplitudes = ANOM  
+        mtz_label_phases = PHANOM  
+      }}  
     }}  
-    map_coefficients {{  
-      map_type = 2mFo-DFc  
-      mtz_label_amplitudes = 2FOFCWT_no_fill  
-      mtz_label_phases = PH2FOFCWT_no_fill  
+    refine {{  
+      strategy = individual_sites individual_sites_real_space rigid_body \   
+                individual_adp group_adp tls occupancies *group_anomalous  
+      anomalous_scatterers {{
+        group {{
+          selection = element {element}
+          f_prime = {f_prime}
+          refine = f_prime *f_double_prime
+        }}
+      }}
+    }}
+    main {{  
+      number_of_macro_cycles = 5  
+      wavelength = {WV}
     }}  
-    map_coefficients {{  
-      map_type = mFo-DFc  
-      mtz_label_amplitudes = FOFCWT  
-      mtz_label_phases = PHFOFCWT  
-    }}  
-    map_coefficients {{  
-      map_type = anomalous  
-      mtz_label_amplitudes = ANOM  
-      mtz_label_phases = PHANOM  
-    }}  
-  }}  
-  refine {{  
-    strategy = individual_sites individual_sites_real_space rigid_body \   
-               individual_adp group_adp tls occupancies *group_anomalous  
-  }}  
-  main {{  
-    number_of_macro_cycles = 5  
-    wavelength = {WV}
-  }}  
-}}''')
+  }}''')
 
 subprocess.run(["phenix.refine", "fdpEffParam.eff"])  
 
