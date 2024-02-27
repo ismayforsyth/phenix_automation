@@ -4,6 +4,7 @@ import cctbx
 import iotbx
 import gemmi
 import subprocess 
+import copy 
 
 os.system("module load phenix")
 
@@ -27,6 +28,41 @@ def lookup_fprime(energy, element):
                 closestValues = (fPrime, fDoublePrime)
     return closestValues
 
+def change_elem(pdbPath, elements):
+	pdbInBase, pdbInExt = pdbPath.rsplit('.', 1)
+
+	pdbLinesWrite = []
+
+	with open(pdbPath, 'r') as file:
+		pdbLinesWrite = file.readlines()
+
+	toChange = []
+	for line in pdbLinesWrite:
+		if line.startswith("HETATM"):
+			print(line.strip())
+			changeHETATM = input("Would you like to run refinement on this HETATM? ")
+			if changeHETATM.lower() in ('y', 'yes'):
+				toChange.append(line)
+			
+	for element in elements:
+		toWrite = copy.deepcopy(pdbLinesWrite)
+		for i, line in enumerate(pdbLinesWrite):
+			if line in toChange:
+				elementSymbol = element.rjust(2)[:2] if len(element) == 2 else ' ' + element
+				residueName = element.rjust(3)[:3]
+				elementName = element.ljust(4)[:4]
+				lineList = list(line)
+				lineList[12:16] = elementName
+				lineList[17:20] = residueName
+				lineList[76:78] = elementSymbol
+				toWrite[i] = ''.join(lineList)
+				
+		with open(f"{pdbInBase}_{element}.{pdbInExt}", 'w') as pdbOut:
+			for line in toWrite:
+				if not line.endswith('\n'):
+					line += '\n'
+				pdbOut.write(line)   
+   
 # pdbIn = input("File location for PDB: ")
 # seqIn = input("File location for SEQ: ")
 # projIn = input("Name of project: ")
@@ -130,7 +166,7 @@ elements = ["Cl", "Ca", "K", "Mg"]
 
 for element in elements:
   energy = wavelength_to_eV(WV)
-  fPrimeDoublePrime = lookup_fprime(energy, element)
+  fPrime, fDoublePrime = lookup_fprime(energy, element)
   with open(f'fdpEffParam_{element}.eff', 'w') as file:
     file.write(f'''refinement {{  
     crystal_symmetry {{
@@ -189,7 +225,7 @@ for element in elements:
       anomalous_scatterers {{
         group {{
           selection = element {element}
-          f_prime = {f_prime}
+          f_prime = {fPrime}
           refine = f_prime *f_double_prime
         }}
       }}
