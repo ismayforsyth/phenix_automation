@@ -5,6 +5,9 @@ import iotbx
 import gemmi
 import subprocess 
 import copy 
+from multiprocessing import Pool
+
+cpus = os.cpu_count() - 1
 
 os.system("module load phenix")
 
@@ -70,6 +73,9 @@ def change_elem(pdbPath, elements):
 pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
 seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
 projIn = "Lysozyme"
+# elementsToTry = input("Which elements to try, comma separated: ")
+elementsToTry = "K, Cl, Ca, Xe"
+elements = [x.strip() for x in elementsToTry.split(',')]
 
 # mtzIn = input("File location for MTZ: ")
 mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
@@ -124,7 +130,7 @@ with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.ef
   output {{  
     prefix = """{projIn}_bpos"""   
     job_title = """{projIn}"""  
-    serial_format = "%d"
+    serial_format = ""
     write_def_file = False  
   }}  
   electron_density_maps {{  
@@ -157,12 +163,13 @@ with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.ef
   main {{  
     number_of_macro_cycles = 5  
     wavelength = {WV}
+    nproc = {cpus}
   }}   
 }}''')
 
 subprocess.run(["phenix.refine", "bposEffParam.eff"])
-  
-elements = ["Cl", "Ca", "K", "Mg"]
+
+fDPRunList = []
 
 for element in elements:
   energy = wavelength_to_eV(WV)
@@ -191,8 +198,8 @@ for element in elements:
       }}  
     }}  
     output {{  
-      prefix = """{projIn}_fdp"""  
-      job_title = """{projIn}"""  
+      prefix = """{projIn}_{element}_fdp"""  
+      job_title = """{projIn}_{element}"""  
       serial_format = "%d"
       write_def_file = False  
     }}  
@@ -268,8 +275,7 @@ subprocess.run(["phenix.refine", "fdpEffParam.eff"])
 # pdbSites = input("What are the sites called in the PDB that you want to change and refine? Comma separated. ")
 # pdbSitesList = [x.strip() for x in pdbSites.split(',')]
 
-# elementsToTry = input("Which elements to try, comma separated: ")
-# elementsToTryList = [x.strip() for x in elementsToTry.split(',')]
+
 
 # # modify eff file
 # for element in elementsToTryList:
