@@ -6,10 +6,13 @@ import gemmi
 import subprocess 
 import copy 
 from multiprocessing import Pool
+from tqdm import tqdm
+from halo import Halo # or can use tqdm, halo is prettier but don't tell you how long it will take
 
 cpus = os.cpu_count() - 1
+pool = Pool(cpus)
 
-os.system("module load phenix")
+os.system("module load phenix") # at some point need to do this nicer, eg. setenv()
 
 def wavelength_to_eV(wavelength):
     h = 6.62607015e-34
@@ -67,7 +70,7 @@ def change_elem(pdbPath, elements):
 				pdbOut.write(line)   
 
 def run_phenix_refine(effFile):
-
+	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
    
 # pdbIn = input("File location for PDB: ")
 # seqIn = input("File location for SEQ: ")
@@ -170,13 +173,15 @@ with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.ef
   }}   
 }}''')
 
-subprocess.run(["phenix.refine", "bposEffParam.eff"])
+with Halo(text="\nRunning B pos refinement", spinner="dots"):
+    run_phenix_refine("bposEffParam.eff")
 
 fDPRunList = []
 
 for element in elements:
   energy = wavelength_to_eV(WV)
   fPrime, fDoublePrime = lookup_fprime(energy, element)
+  fDPRunList.append(f"fdpEffParam_{element}.eff")
   with open(f'fdpEffParam_{element}.eff', 'w') as file:
     file.write(f'''refinement {{  
     crystal_symmetry {{
@@ -246,7 +251,8 @@ for element in elements:
     }}  
   }}''')
 
-subprocess.run(["phenix.refine", "fdpEffParam.eff"])  
+with Halo("\nRunning f'' refinement", spinner="dots"):
+	pool.starmap(run_phenix_refine, fDPRunList)
 
 # declare residues and give theoretical f' etc --- crossec (f'/f'' tabulated values)
 
