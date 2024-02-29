@@ -65,6 +65,9 @@ def change_elem(pdbPath, elements):
 				if not line.endswith('\n'):
 					line += '\n'
 				pdbOut.write(line)   
+
+def run_phenix_refine(effFile):
+
    
 # pdbIn = input("File location for PDB: ")
 # seqIn = input("File location for SEQ: ")
