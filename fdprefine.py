@@ -77,11 +77,45 @@ def run_phenix_refine(effFile):
 # projIn = input("Name of project: ")
 # effIn = input("File location for EFF: ")
 pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
+pdbInBase, pdbInExt = pdbIn.rsplit('.', 1)
 seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
 projIn = "Lysozyme"
 # elementsToTry = input("Which elements to try, comma separated: ")
 elementsToTry = "K, Cl, Ca, Xe"
 elements = [x.strip() for x in elementsToTry.split(',')]
+
+pdbLinesWrite = []
+
+with open(pdbIn, 'r') as file:
+    pdbLinesWrite = file.readlines()
+    pdbLinesWrite_const = pdbLinesWrite
+
+toChange = []
+for line in pdbLinesWrite:
+    if line.startswith("HETATM"):
+        print(line.strip())
+        changeHETATM = input("Would you like to run refinement on this HETATM? ")
+        if changeHETATM.lower() in ('y', 'yes'):
+            toChange.append(line)
+        
+for element in elements:
+    toWrite = copy.deepcopy(pdbLinesWrite)
+    for i, line in enumerate(pdbLinesWrite):
+        if line in toChange:
+            elementSymbol = element.rjust(2)[:2] if len(element) == 2 else ' ' + element
+            residueName = element.rjust(3)[:3]
+            elementName = element.ljust(4)[:4]
+            lineList = list(line)
+            lineList[12:16] = elementName
+            lineList[17:20] = residueName
+            lineList[76:78] = elementSymbol
+            toWrite[i] = ''.join(lineList)
+            
+    with open(f"{pdbInBase}_{element}.{pdbInExt}", 'w') as pdbOut:
+        for line in toWrite:
+            if not line.endswith('\n'):
+                line += '\n'
+            pdbOut.write(line)
 
 # mtzIn = input("File location for MTZ: ")
 mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
@@ -108,6 +142,8 @@ print(unit_cell_strip)
 mtz = gemmi.read_mtz_file(mtzIn)
 WV = (mtz.dataset(1).wavelength)
 print(WV)
+
+
 
 # Create bpos eff file
 with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.eff', 'w') as file:
@@ -190,7 +226,7 @@ for element in elements:
     }}  
     input {{  
       pdb {{  
-        file_name = "{projIn}_bpos_1.pdb"  
+        file_name = "{projIn}_bpos_.pdb"  
       }}  
       xray_data {{  
         file_name = "{mtzIn}"
@@ -250,17 +286,12 @@ for element in elements:
       wavelength = {WV}
     }}  
   }}''')
+    
 
 with Halo("\nRunning f'' refinement", spinner="dots"):
 	pool.starmap(run_phenix_refine, fDPRunList)
 
 # declare residues and give theoretical f' etc --- crossec (f'/f'' tabulated values)
-
-# run f'' using phenix.refine
-
-# subprocess.run(["phenix.refine", "fdpEffParam.eff"])
-
-# change element type in pdb and redo.... 
 
 
 
