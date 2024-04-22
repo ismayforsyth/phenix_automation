@@ -38,6 +38,7 @@ def change_elem(pdbPath, elements):
 	pdbInBase, pdbInExt = pdbPath.rsplit('.', 1)
 
 	pdbLinesWrite = []
+	pdbList = []
 
 	with open(pdbPath, 'r') as file:
 		pdbLinesWrite = file.readlines()
@@ -64,10 +65,16 @@ def change_elem(pdbPath, elements):
 				toWrite[i] = ''.join(lineList)
 				
 		with open(f"{pdbInBase}_{element}.{pdbInExt}", 'w') as pdbOut:
+			pdbList.append((pdbOut,element))
 			for line in toWrite:
 				if not line.endswith('\n'):
 					line += '\n'
-				pdbOut.write(line)   
+				pdbOut.write(line) 
+    
+	return pdbList
+
+def new_func(pdbList):
+    return pdbList 
 
 def run_phenix_refine(effFile):
 	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
@@ -110,82 +117,75 @@ mtz = gemmi.read_mtz_file(mtzIn)
 WV = (mtz.dataset(1).wavelength)
 print(WV)
 
-
-
 # Create bpos eff file
-with open('/dls/i23/data/2023/cm33851-4/processing/Ismay/Scripts/bposEffParam.eff', 'w') as file:
-  file.write(f'''refinement {{
-  crystal_symmetry {{  
-    unit_cell = {unit_cell_strip}
-    space_group = {space_group}
-  }}
-  input {{  
-    pdb {{  
-      file_name = "{pdbIn}"  
-    }}  
-    xray_data {{  
-      file_name = "{mtzIn}"
-      labels = IMEAN,SIGIMEAN  
-      r_free_flags {{  
+def runBPos(pdbIn,elementIn):
+  with open(f'bposEffParam_{elementIn}.eff', 'w') as file:
+    file.write(f'''refinement {{
+    crystal_symmetry {{  
+      unit_cell = {unit_cell_strip}
+      space_group = {space_group}
+    }}
+    input {{  
+      pdb {{  
+        file_name = "{pdbIn}"  
+      }}  
+      xray_data {{  
         file_name = "{mtzIn}"
-        label = FreeR_flag  
-        test_flag_value = 0  
+        labels = IMEAN,SIGIMEAN  
+        r_free_flags {{  
+          file_name = "{mtzIn}"
+          label = FreeR_flag  
+          test_flag_value = 0  
+        }}  
+      }}  
+      sequence {{  
+        file_name = "{seqIn}"  
       }}  
     }}  
-    sequence {{  
-      file_name = "{seqIn}"  
+    output {{  
+      prefix = """{projIn}_bpos_{elementIn}"""   
+      job_title = """{projIn}"""  
+      serial_format = ""
+      write_def_file = False  
     }}  
-  }}  
-  output {{  
-    prefix = """{projIn}_bpos"""   
-    job_title = """{projIn}"""  
-    serial_format = ""
-    write_def_file = False  
-  }}  
-  electron_density_maps {{  
-    map_coefficients {{  
-      map_type = 2mFo-DFc  
-      mtz_label_amplitudes = 2FOFCWT  
-      mtz_label_phases = PH2FOFCWT  
-      fill_missing_f_obs = True  
+    electron_density_maps {{  
+      map_coefficients {{  
+        map_type = 2mFo-DFc  
+        mtz_label_amplitudes = 2FOFCWT  
+        mtz_label_phases = PH2FOFCWT  
+        fill_missing_f_obs = True  
+      }}  
+      map_coefficients {{  
+        map_type = 2mFo-DFc  
+        mtz_label_amplitudes = 2FOFCWT_no_fill  
+        mtz_label_phases = PH2FOFCWT_no_fill  
+      }}  
+      map_coefficients {{  
+        map_type = mFo-DFc  
+        mtz_label_amplitudes = FOFCWT  
+        mtz_label_phases = PHFOFCWT  
+      }}  
+      map_coefficients {{  
+        map_type = anomalous  
+        mtz_label_amplitudes = ANOM  
+        mtz_label_phases = PHANOM  
+      }}  
     }}  
-    map_coefficients {{  
-      map_type = 2mFo-DFc  
-      mtz_label_amplitudes = 2FOFCWT_no_fill  
-      mtz_label_phases = PH2FOFCWT_no_fill  
+    refine {{  
+      strategy = *individual_sites individual_sites_real_space rigid_body \  
+                *individual_adp group_adp tls occupancies group_anomalous  
     }}  
-    map_coefficients {{  
-      map_type = mFo-DFc  
-      mtz_label_amplitudes = FOFCWT  
-      mtz_label_phases = PHFOFCWT  
-    }}  
-    map_coefficients {{  
-      map_type = anomalous  
-      mtz_label_amplitudes = ANOM  
-      mtz_label_phases = PHANOM  
-    }}  
-  }}  
-  refine {{  
-    strategy = *individual_sites individual_sites_real_space rigid_body \  
-               *individual_adp group_adp tls occupancies group_anomalous  
-  }}  
-  main {{  
-    number_of_macro_cycles = 5  
-    wavelength = {WV}
-    nproc = {cpus}
-  }}   
-}}''')
+    main {{  
+      number_of_macro_cycles = 5  
+      wavelength = {WV}
+      nproc = {cpus}
+    }}   
+  }}''')
+	
+  subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
 
-with Halo(text="\nRunning B pos refinement", spinner="dots"):
-    run_phenix_refine("bposEffParam.eff")
-
-fDPRunList = []
-
-for element in elements:
-  energy = wavelength_to_eV(WV)
-  fPrime, fDoublePrime = lookup_fprime(energy, element)
-  fDPRunList.append(f"fdpEffParam_{element}.eff")
-  with open(f'fdpEffParam_{element}.eff', 'w') as file:
+def runFdp(elementIn):
+  with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
     file.write(f'''refinement {{  
     crystal_symmetry {{
       unit_cell = {unit_cell_strip}
@@ -209,8 +209,8 @@ for element in elements:
       }}  
     }}  
     output {{  
-      prefix = """{projIn}_{element}_fdp"""  
-      job_title = """{projIn}_{element}"""  
+      prefix = """{projIn}_{elementIn}_fdp"""  
+      job_title = """{projIn}_{elementIn}"""  
       serial_format = "%d"
       write_def_file = False  
     }}  
@@ -242,7 +242,7 @@ for element in elements:
                 individual_adp group_adp tls occupancies *group_anomalous  
       anomalous_scatterers {{
         group {{
-          selection = element {element}
+          selection = element {elementIn}
           f_prime = {fPrime}
           refine = f_prime *f_double_prime
         }}
@@ -253,7 +253,24 @@ for element in elements:
       wavelength = {WV}
     }}  
   }}''')
-    
+	
+  subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"])  
 
-with Halo("\nRunning f'' refinement", spinner="dots"):
-	pool.starmap(run_phenix_refine, fDPRunList)
+if __name__ == "__main__":
+    pdbList = change_elem(pdbIn, elements)
+    for pdb, ele in pdbList:
+      runBPos(pdb, ele)
+      runFdp(ele)
+
+# with Halo(text="\nRunning B pos refinement", spinner="dots"):
+#     run_phenix_refine("bposEffParam.eff")
+
+# fDPRunList = []
+
+# for element in elements:
+#   energy = wavelength_to_eV(WV)
+#   fPrime, fDoublePrime = lookup_fprime(energy, element)
+#   fDPRunList.append(f"fdpEffParam_{element}.eff")
+
+# with Halo("\nRunning f'' refinement", spinner="dots"):
+# 	pool.starmap(run_phenix_refine, fDPRunList)

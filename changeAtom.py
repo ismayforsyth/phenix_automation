@@ -2,7 +2,7 @@ import copy
 
 elements = ["Na", "Mg", "S", "Cl", "K", "Ca"]
 
-pdbIn = "/Users/vwg85559/phenix_automation/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
+pdbIn = "Lysozyme-FinalLSvsnLS_phaser.1.pdb"
 pdbInBase, pdbInExt = pdbIn.rsplit('.', 1)
 
 pdbLinesWrite = []
