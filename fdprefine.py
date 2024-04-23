@@ -12,7 +12,8 @@ from halo import Halo # or can use tqdm, halo is prettier but don't tell you how
 cpus = os.cpu_count() - 1
 pool = Pool(cpus)
 
-os.system("module load phenix") # at some point need to do this nicer, eg. setenv()
+os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
+
 
 def wavelength_to_eV(wavelength):
     h = 6.62607015e-34
@@ -86,6 +87,7 @@ def run_phenix_refine(effFile):
 pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
 seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
 projIn = "Lysozyme"
+
 # elementsToTry = input("Which elements to try, comma separated: ")
 elementsToTry = "K, Cl, Ca, Xe"
 elements = [x.strip() for x in elementsToTry.split(',')]
