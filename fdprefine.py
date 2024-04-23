@@ -1,3 +1,4 @@
+#!/dls/science/groups/i23/pyenvs/tihana_conda/bin/python
 import os
 from iotbx import reflection_file_reader 
 import cctbx
@@ -37,7 +38,8 @@ def lookup_fprime(energy, element):
 
 def change_elem(pdbPath, elements):
 	pdbInBase, pdbInExt = pdbPath.rsplit('.', 1)
-
+	pdbInBase = os.path.basename(pdbInBase)
+	print(f"Running on {str(pdbInBase)}")
 	pdbLinesWrite = []
 	pdbList = []
 
@@ -45,12 +47,14 @@ def change_elem(pdbPath, elements):
 		pdbLinesWrite = file.readlines()
 
 	toChange = []
+	toFDPRefine = []
 	for line in pdbLinesWrite:
 		if line.startswith("HETATM"):
 			print(line.strip())
 			changeHETATM = input("Would you like to run refinement on this HETATM? ")
 			if changeHETATM.lower() in ('y', 'yes'):
 				toChange.append(line)
+
 			
 	for element in elements:
 		toWrite = copy.deepcopy(pdbLinesWrite)
@@ -64,37 +68,34 @@ def change_elem(pdbPath, elements):
 				lineList[17:20] = residueName
 				lineList[76:78] = elementSymbol
 				toWrite[i] = ''.join(lineList)
+				toFDPRefine.append((f'{lineList[12:16]}, {lineList[21:22]}, {lineList[23:26]}'))
 				
 		with open(f"{pdbInBase}_{element}.{pdbInExt}", 'w') as pdbOut:
-			pdbList.append((pdbOut,element))
 			for line in toWrite:
 				if not line.endswith('\n'):
 					line += '\n'
-				pdbOut.write(line) 
-    
+				pdbOut.write(line)
+			pdbList.append((f"{pdbInBase}_{element}.{pdbInExt}", element, toFDPRefine))
+	
 	return pdbList
 
-def new_func(pdbList):
-    return pdbList 
 
 def run_phenix_refine(effFile):
 	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
    
-# pdbIn = input("File location for PDB: ")
-# seqIn = input("File location for SEQ: ")
-# projIn = input("Name of project: ")
+mtzIn = input("File location for MTZ: ")
+pdbIn = input("File location for PDB: ")
+seqIn = input("File location for SEQ: ")
+projIn = input("Name of project: ")
 # effIn = input("File location for EFF: ")
-pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
-seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
-projIn = "Lysozyme"
+# pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
+# seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
+# projIn = "Lysozyme"
+#mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
 
-# elementsToTry = input("Which elements to try, comma separated: ")
-elementsToTry = "K, Cl, Ca, Xe"
+elementsToTry = input("Which elements to try, comma separated: ")
+#elementsToTry = "K, Cl, Ca, Xe"
 elements = [x.strip() for x in elementsToTry.split(',')]
-
-
-# mtzIn = input("File location for MTZ: ")
-mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
 
 # Create mtz object storing information
 mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
@@ -145,9 +146,9 @@ def runBPos(pdbIn,elementIn):
       }}  
     }}  
     output {{  
-      prefix = """{projIn}_bpos_{elementIn}"""   
+      prefix = """{projIn}_bpos_{str(elementIn)}"""   
       job_title = """{projIn}"""  
-      serial_format = ""
+      serial_format = "%d"
       write_def_file = False  
     }}  
     electron_density_maps {{  
@@ -186,7 +187,7 @@ def runBPos(pdbIn,elementIn):
 	
   subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
 
-def runFdp(elementIn):
+def runFdp(elementIn, fPrime, atom, chain, resid):
   with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
     file.write(f'''refinement {{  
     crystal_symmetry {{
@@ -195,7 +196,7 @@ def runFdp(elementIn):
     }}  
     input {{  
       pdb {{  
-        file_name = "{projIn}_bpos_.pdb"  
+        file_name = "{projIn}_bpos_{elementIn}_1.pdb"  
       }}  
       xray_data {{  
         file_name = "{mtzIn}"
@@ -211,7 +212,7 @@ def runFdp(elementIn):
       }}  
     }}  
     output {{  
-      prefix = """{projIn}_{elementIn}_fdp"""  
+      prefix = """{projIn}_fdp_{elementIn}"""  
       job_title = """{projIn}_{elementIn}"""  
       serial_format = "%d"
       write_def_file = False  
@@ -248,6 +249,11 @@ def runFdp(elementIn):
           f_prime = {fPrime}
           refine = f_prime *f_double_prime
         }}
+        group {{
+          selection = chain and resid and element {elementIn}
+          f_prime = {fPrime}
+          refine = f_prime *f_double_prime
+        }}
       }}
     }}
     main {{  
@@ -259,10 +265,18 @@ def runFdp(elementIn):
   subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"])  
 
 if __name__ == "__main__":
+    
     pdbList = change_elem(pdbIn, elements)
-    for pdb, ele in pdbList:
-      runBPos(pdb, ele)
-      runFdp(ele)
+    energy = wavelength_to_eV(WV)
+    for pdb, ele, toFDPRefine in pdbList:
+		if len(toFDPRefine) = 1:
+			atom, chain, resid = toFDPRefine
+		elif len(toFDPRefine) >= 2:
+			 # can be multiple
+		fp = list(lookup_fprime(energy, ele))[0]
+		print(fp)
+		runBPos(pdb, ele)
+		runFdp(ele, fp, atom, chain, resid)
 
 # with Halo(text="\nRunning B pos refinement", spinner="dots"):
 #     run_phenix_refine("bposEffParam.eff")
