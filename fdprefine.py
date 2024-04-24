@@ -121,9 +121,9 @@ WV = (mtz.dataset(1).wavelength)
 print(WV)
 
 # Create bpos eff file
-def runBPos(pdbIn,elementIn):
-  with open(f'bposEffParam_{elementIn}.eff', 'w') as file:
-    file.write(f'''refinement {{
+def runBPos(pdbIn, elementIn):
+    with open(f'bposEffParam_{elementIn}.eff', 'w') as file:
+    	file.write(f'''refinement {{
     crystal_symmetry {{  
       unit_cell = {unit_cell_strip}
       space_group = {space_group}
@@ -184,12 +184,21 @@ def runBPos(pdbIn,elementIn):
       nproc = {cpus}
     }}   
   }}''')
-	
-  subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
+	subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
 
-def runFdp(elementIn, fPrime, atom, chain, resid):
-  with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
-    file.write(f'''refinement {{  
+def runFdp(elementIn, fPrime, toFDPRefine):
+    anomalousScatterersStr = "  anomalous_scatterers {{\n"
+    for elemID, chainID, residID in toFDPRefine:
+        groupStr = f"""    group {{
+      selection = chain {chainID} and resid {residID} and element {elemID}
+      f_prime = {fPrime}
+      refine = f_prime *f_double_prime
+    }}\n"""
+    	anomalousScatterersStr += groupStr
+    anomalousScatterersStr += "  }}"
+    
+    with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
+       file.write(f'''refinement {{  
     crystal_symmetry {{
       unit_cell = {unit_cell_strip}
       space_group = {space_group}
@@ -243,18 +252,7 @@ def runFdp(elementIn, fPrime, atom, chain, resid):
     refine {{  
       strategy = individual_sites individual_sites_real_space rigid_body \   
                 individual_adp group_adp tls occupancies *group_anomalous  
-      anomalous_scatterers {{
-        group {{
-          selection = element {elementIn}
-          f_prime = {fPrime}
-          refine = f_prime *f_double_prime
-        }}
-        group {{
-          selection = chain and resid and element {elementIn}
-          f_prime = {fPrime}
-          refine = f_prime *f_double_prime
-        }}
-      }}
+	  {anomalousScatterersStr}
     }}
     main {{  
       number_of_macro_cycles = 5  
@@ -262,21 +260,15 @@ def runFdp(elementIn, fPrime, atom, chain, resid):
     }}  
   }}''')
 	
-  subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"])  
+  	subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"])  
 
-if __name__ == "__main__":
-    
-    pdbList = change_elem(pdbIn, elements)
-    energy = wavelength_to_eV(WV)
-    for pdb, ele, toFDPRefine in pdbList:
-		if len(toFDPRefine) = 1:
-			atom, chain, resid = toFDPRefine
-		elif len(toFDPRefine) >= 2:
-			 # can be multiple
+if __name__ == "__main__":    
+	pdbList = change_elem(pdbIn, elements)
+	energy = wavelength_to_eV(WV)
+	for pdb, ele, toFDPRefine in pdbList:
 		fp = list(lookup_fprime(energy, ele))[0]
-		print(fp)
 		runBPos(pdb, ele)
-		runFdp(ele, fp, atom, chain, resid)
+		runFdp(ele, fp, toFDPRefine)
 
 # with Halo(text="\nRunning B pos refinement", spinner="dots"):
 #     run_phenix_refine("bposEffParam.eff")
