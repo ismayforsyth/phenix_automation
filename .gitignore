@@ -2,4 +2,5 @@
 *.mtz
 *.geo
 *.eff
-
+*.pdb
+*.log
