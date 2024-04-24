@@ -1,7 +1,8 @@
 #!/dls/science/groups/i23/pyenvs/tihana_conda/bin/python
 import os
+import re
 from iotbx import reflection_file_reader 
-import cctbx
+#import cctbx
 import iotbx
 import gemmi
 import subprocess 
