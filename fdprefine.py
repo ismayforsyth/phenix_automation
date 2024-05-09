@@ -48,7 +48,6 @@ def change_elem(pdbPath, elements):
 		pdbLinesWrite = file.readlines()
 
 	toChange = []
-	toFDPRefine = []
 	for line in pdbLinesWrite:
 		if line.startswith("HETATM"):
 			print(line.strip())
@@ -57,6 +56,7 @@ def change_elem(pdbPath, elements):
 				toChange.append(line)
 
 	for element in elements:
+		toFDPRefine = []
 		toWrite = copy.deepcopy(pdbLinesWrite)
 		for i, line in enumerate(pdbLinesWrite):
 			if line in toChange:
@@ -68,7 +68,7 @@ def change_elem(pdbPath, elements):
 				lineList[17:20] = residueName
 				lineList[76:78] = elementSymbol
 				toWrite[i] = ''.join(lineList)
-				toFDPRefine.append((f'{lineList[12:16]}, {lineList[21:22]}, {lineList[23:26]}'))
+				toFDPRefine.append([element, line[21:22].strip(), line[23:26].strip()])
 				
 		with open(f"{pdbInBase}_{element}.{pdbInExt}", 'w') as pdbOut:
 			for line in toWrite:
@@ -76,21 +76,21 @@ def change_elem(pdbPath, elements):
 					line += '\n'
 				pdbOut.write(line)
 			pdbList.append((f"{pdbInBase}_{element}.{pdbInExt}", element, toFDPRefine))
-	
+
 	return pdbList
 
 def run_phenix_refine(effFile):
 	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
    
-mtzIn = input("File location for MTZ: ")
-pdbIn = input("File location for PDB: ")
-seqIn = input("File location for SEQ: ")
-projIn = input("Name of project: ")
+# mtzIn = input("File location for MTZ: ")
+# pdbIn = input("File location for PDB: ")
+# seqIn = input("File location for SEQ: ")
+# projIn = input("Name of project: ")
 # effIn = input("File location for EFF: ")
-# pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
-# seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
-# projIn = "Lysozyme"
-#mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
+pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
+seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
+projIn = "Lysozyme"
+mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
 
 elementsToTry = input("Which elements to try, comma separated: ")
 #elementsToTry = "K, Cl, Ca, Xe"
@@ -187,15 +187,15 @@ def runBPos(pdbIn, elementIn):
   subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
 
 def runFdp(elementIn, fPrime, toFDPRefine):
-  anomalousScatterersStr = "  anomalous_scatterers {{\n"
+  anomalousScatterersStr = "anomalous_scatterers {{\n"
   for elemID, chainID, residID in toFDPRefine:
-      groupStr = f"""    group {{
-    selection = chain {chainID} and resid {residID} and element {elemID}
-    f_prime = {fPrime}
-    refine = f_prime *f_double_prime
-  }}\n"""
-  anomalousScatterersStr += groupStr
-  anomalousScatterersStr += "  }}"
+      groupStr = f"""          group {{
+            selection = chain {chainID} and resid {residID} and element {elemID}
+            f_prime = {fPrime}
+            refine = f_prime *f_double_prime
+          }}\n"""
+      anomalousScatterersStr += groupStr
+  anomalousScatterersStr += "        }"
   
   with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
     file.write(f'''refinement {{  
@@ -252,7 +252,7 @@ def runFdp(elementIn, fPrime, toFDPRefine):
       refine {{  
         strategy = individual_sites individual_sites_real_space rigid_body \   
                   individual_adp group_adp tls occupancies *group_anomalous  
-      {anomalousScatterersStr}
+      	{anomalousScatterersStr}
       }}
       main {{  
         number_of_macro_cycles = 5  
@@ -265,10 +265,11 @@ def runFdp(elementIn, fPrime, toFDPRefine):
 if __name__ == "__main__":    
 	pdbList = change_elem(pdbIn, elements)
 	energy = wavelength_to_eV(WV)
-	for pdb, ele, toFDPRefine in pdbList:
+	for pdb, ele, tfdpr in pdbList:
+		print(pdb, ele, tfdpr)
 		fp = list(lookup_fprime(energy, ele))[0]
 		runBPos(pdb, ele)
-		runFdp(ele, fp, toFDPRefine)
+		runFdp(ele, fp, tfdpr)
 
 import re
 
