@@ -81,6 +81,27 @@ def change_elem(pdbPath, elements):
 
 def run_phenix_refine(effFile):
 	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
+ 
+def scrapeLastAnomalousGroupData(log_file_path):
+  with open(log_file_path, 'r') as file:
+    content = file.read()
+
+  last_macro_cycle_index = content.rfind('MACRO_CYCLE')
+
+  content_after_macro_cycle = content[last_macro_cycle_index:]
+    
+  pattern = re.compile(
+      r'Anomalous scatterer group:\s+'
+      r'Selection: "chain (?P<chain>[A-Za-z]) and resid (?P<resid>\d+) and element (?P<element>[A-Za-z]+)"\s+'
+      r'Number of selected scatterers: \d+\s+'
+      r'f_prime: +[+-]?\d+\.\d+\s+'
+      r'f_double_prime: (?P<f_double_prime>[+-]?\d+\.\d+)'
+  )
+
+  matches = pattern.findall(content_after_macro_cycle)
+  data = [(m[0], int(m[1]), m[2], float(m[3])) for m in matches]
+
+  return data
    
 # mtzIn = input("File location for MTZ: ")
 # pdbIn = input("File location for PDB: ")
@@ -104,7 +125,6 @@ mtzobj = iotbx.mtz.object(mtzIn)
 
 # Extract space group
 space_group = mtzobj.space_group_name()
-print(space_group)
 # Create dictionary matching concatenated space groups with correct spacing ???
 
 # Extract unit cell params
@@ -112,12 +132,10 @@ csym = mtzobj.crystals()[0].crystal_symmetry()
 unit_cell = csym.unit_cell()
 # Remove list characters
 unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
-print(unit_cell_strip)
 
 # Extract WV
 mtz = gemmi.read_mtz_file(mtzIn)
 WV = (mtz.dataset(1).wavelength)
-print(WV)
 
 # Create bpos eff file
 def runBPos(pdbIn, elementIn):
@@ -265,38 +283,19 @@ def runFdp(elementIn, fPrime, toFDPRefine):
 if __name__ == "__main__":    
 	pdbList = change_elem(pdbIn, elements)
 	energy = wavelength_to_eV(WV)
+	scrapedData = []
 	for pdb, ele, tfdpr in pdbList:
 		print(pdb, ele, tfdpr)
 		fp = list(lookup_fprime(energy, ele))[0]
 		runBPos(pdb, ele)
 		runFdp(ele, fp, tfdpr)
+		logFile = (f'{projIn}_fdp_{ele}_1.log')
+		scrapedData.append(scrapeLastAnomalousGroupData(logFile))
+	print(scrapedData)
 
-# import re
 
-# def scrapeLastAnomalousGroupData(log_file_path):
-#     with open(log_file_path, 'r') as file:
-#         content = file.read()
 
-#     last_macro_cycle_index = content.rfind('MACRO_CYCLE')
 
-#     content_after_macro_cycle = content[last_macro_cycle_index:]
-    
-#     pattern = re.compile(
-#         r'Anomalous scatterer group:\s+'
-#         r'Selection: "chain (?P<chain>[A-Za-z]) and resid (?P<resid>\d+) and element (?P<element>[A-Za-z]+)"\s+'
-#         r'Number of selected scatterers: \d+\s+'
-#         r'f_prime: +[+-]?\d+\.\d+\s+'
-#         r'f_double_prime: (?P<f_double_prime>[+-]?\d+\.\d+)'
-#     )
-
-#     matches = pattern.findall(content_after_macro_cycle)
-#     data = [(m[0], int(m[1]), m[2], float(m[3])) for m in matches]
-
-#     return data
-
-# log_file_path = '/Users/vwg85559/phenix_automation-1/lys_fdp_refine_refine_2.log'
-# last_anomalous_group_data = scrapeLastAnomalousGroupData(log_file_path)
-# print(last_anomalous_group_data)
 
 
 # with Halo(text="\nRunning B pos refinement", spinner="dots"):
@@ -304,10 +303,6 @@ if __name__ == "__main__":
 
 # fDPRunList = []
 
-# for element in elements:
-#   energy = wavelength_to_eV(WV)
-#   fPrime, fDoublePrime = lookup_fprime(energy, element)
-#   fDPRunList.append(f"fdpEffParam_{element}.eff")
 
 # with Halo("\nRunning f'' refinement", spinner="dots"):
 # 	pool.starmap(run_phenix_refine, fDPRunList)
