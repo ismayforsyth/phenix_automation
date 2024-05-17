@@ -18,7 +18,7 @@ import plotly.io as pio
 cpus = os.cpu_count() - 1
 pool = Pool(cpus)
 
-os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
+#os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
 
 mtzIn = input("File location for MTZ: ")
 pdbIn = input("File location for PDB: ")
