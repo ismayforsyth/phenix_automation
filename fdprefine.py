@@ -1,8 +1,10 @@
 #!/dls/science/groups/i23/pyenvs/tihana_conda/bin/python
+
+#set tab size to 2
+
 import os
 import re
 from iotbx import reflection_file_reader 
-#import cctbx
 import iotbx
 import gemmi
 import subprocess 
@@ -10,12 +12,47 @@ import copy
 from multiprocessing import Pool
 from tqdm import tqdm
 from halo import Halo # or can use tqdm, halo is prettier but don't tell you how long it will take
+import plotly.graph_objects as go
+import plotly.io as pio
 
 cpus = os.cpu_count() - 1
 pool = Pool(cpus)
 
 os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
-  
+
+mtzIn = input("File location for MTZ: ")
+pdbIn = input("File location for PDB: ")
+seqIn = input("File location for SEQ: ")
+projIn = input("Name of project: ")
+# effIn = input("File location for EFF: ")
+# pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
+# seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
+# projIn = "Lysozyme"
+# mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
+
+elementsToTry = input("Which elements to try, comma separated: ")
+#elementsToTry = "K, Cl, Ca, Xe"
+elements = [x.strip() for x in elementsToTry.split(',')]
+
+# Create mtz object storing information
+mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
+millerArray = mtzInfo.as_miller_arrays()
+mtzInfo.file_content()
+mtzobj = iotbx.mtz.object(mtzIn)
+
+# Extract space group
+space_group = mtzobj.space_group_name()
+# Create dictionary matching concatenated space groups with correct spacing ???
+
+# Extract unit cell params
+csym = mtzobj.crystals()[0].crystal_symmetry()
+unit_cell = csym.unit_cell()
+# Remove list characters
+unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
+
+# Extract WV
+mtz = gemmi.read_mtz_file(mtzIn)
+WV = (mtz.dataset(1).wavelength)
   
 def wavelength_to_eV(wavelength):
     h = 6.62607015e-34
@@ -82,7 +119,7 @@ def change_elem(pdbPath, elements):
 def run_phenix_refine(effFile):
 	subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
  
-def scrapeLastAnomalousGroupData(log_file_path):
+def scrapeLastAnomalousGroupData(log_file_path, theoreticalFDP):
   with open(log_file_path, 'r') as file:
     content = file.read()
 
@@ -99,43 +136,25 @@ def scrapeLastAnomalousGroupData(log_file_path):
   )
 
   matches = pattern.findall(content_after_macro_cycle)
-  data = [(m[0], int(m[1]), m[2], float(m[3])) for m in matches]
+  data = [(m[0], int(m[1]), m[2], float(m[3]), float(theoreticalFDP), float(abs(float(theoreticalFDP) - (float(m[3]))))) for m in matches]
 
   return data
-   
-# mtzIn = input("File location for MTZ: ")
-# pdbIn = input("File location for PDB: ")
-# seqIn = input("File location for SEQ: ")
-# projIn = input("Name of project: ")
-# effIn = input("File location for EFF: ")
-pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
-seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
-projIn = "Lysozyme"
-mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
 
-elementsToTry = input("Which elements to try, comma separated: ")
-#elementsToTry = "K, Cl, Ca, Xe"
-elements = [x.strip() for x in elementsToTry.split(',')]
+def makeTable(scrapedData):
+  header = ['Chain', 'ResidID', 'Element', 'Refined FDP', "Theoretical FDP", "Absolute Difference"]
+  flattenedData = [item for sublist in scrapedData for item in sublist]
+  tableData = list(map(list, zip(*flattenedData)))
+  
+  fig = go.Figure(data=[go.Table(
+    header=dict(values=header,
+                fill_color='paleturquoise',
+                align='left'),
+    cells=dict(values=tableData,
+               fill_color='lavender',
+               align='left'))
+	])
+  pio.write_html(fig, f'{projIn}.html')
 
-# Create mtz object storing information
-mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
-millerArray = mtzInfo.as_miller_arrays()
-mtzInfo.file_content()
-mtzobj = iotbx.mtz.object(mtzIn)
-
-# Extract space group
-space_group = mtzobj.space_group_name()
-# Create dictionary matching concatenated space groups with correct spacing ???
-
-# Extract unit cell params
-csym = mtzobj.crystals()[0].crystal_symmetry()
-unit_cell = csym.unit_cell()
-# Remove list characters
-unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
-
-# Extract WV
-mtz = gemmi.read_mtz_file(mtzIn)
-WV = (mtz.dataset(1).wavelength)
 
 # Create bpos eff file
 def runBPos(pdbIn, elementIn):
@@ -287,11 +306,15 @@ if __name__ == "__main__":
 	for pdb, ele, tfdpr in pdbList:
 		print(pdb, ele, tfdpr)
 		fp = list(lookup_fprime(energy, ele))[0]
+		theoreticalFDP = list(lookup_fprime(energy, ele))[1]
 		runBPos(pdb, ele)
 		runFdp(ele, fp, tfdpr)
 		logFile = (f'{projIn}_fdp_{ele}_1.log')
-		scrapedData.append(scrapeLastAnomalousGroupData(logFile))
+		scrapedData.append(scrapeLastAnomalousGroupData(logFile, theoreticalFDP))
 	print(scrapedData)
+	makeTable(scrapedData)
+
+	
 
 
 
