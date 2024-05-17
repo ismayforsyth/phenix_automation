@@ -1,7 +1,5 @@
 #!/dls/science/groups/i23/pyenvs/tihana_conda/bin/python
-
 #set tab size to 2
-
 import os
 import re
 from iotbx import reflection_file_reader 
@@ -10,21 +8,20 @@ import gemmi
 import subprocess 
 import copy 
 import sys
-from multiprocessing import Pool
 from tqdm import tqdm
 from halo import Halo 
 import plotly.graph_objects as go
 import plotly.io as pio
 
+from multiprocessing import Pool
 cpus = os.cpu_count() - 1
 pool = Pool(cpus)
 
-os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
-subprocess.run(["module", "load", "phenix"])
 try:
 	subprocess.run(["phenix.about"])
+	print("Found Phenix installation")
 except:
-	print("Cannon find Phenix installation. Try to run module load phenix")
+	print("Cannot find Phenix installation. Try to run module load phenix")
 
 mtzIn = input("File location for MTZ: ")
 pdbIn = input("File location for PDB: ")
@@ -35,7 +32,7 @@ if genMonomerLib == "y":
 	subprocess.run(["phenix.ready_set", f"{pdbIn}"])
 	pdbInBase, pdbInExt = pdbIn.rsplit('.', 1)
 	pdbInBase = os.path.basename(pdbInBase)
-	ligandIn = str(pdbInBase + "ligands.cif")
+	ligandIn = str(pdbInBase + ".ligands.cif")
 else:
 	ligandIn = str(None)
 # effIn = input("File location for EFF: ")
