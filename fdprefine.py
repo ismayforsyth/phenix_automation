@@ -22,7 +22,7 @@ os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
 
 mtzIn = input("File location for MTZ: ")
 pdbIn = input("File location for PDB: ")
-seqIn = input("File location for SEQ: ")
+#seqIn = input("File location for SEQ: ")
 projIn = input("Name of project: ")
 # effIn = input("File location for EFF: ")
 # pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
@@ -177,8 +177,6 @@ def runBPos(pdbIn, elementIn):
             test_flag_value = 0  
           }}  
         }}  
-        sequence {{  
-          file_name = "{seqIn}"  
         }}  
       }}  
       output {{  
@@ -252,9 +250,6 @@ def runFdp(elementIn, fPrime, toFDPRefine):
             label = FreeR_flag  
             test_flag_value = 0  
           }}  
-        }}  
-        sequence {{  
-          file_name = "{seqIn}"  
         }}  
       }}  
       output {{  
