@@ -9,21 +9,35 @@ import iotbx
 import gemmi
 import subprocess 
 import copy 
+import sys
 from multiprocessing import Pool
 from tqdm import tqdm
-from halo import Halo # or can use tqdm, halo is prettier but don't tell you how long it will take
+from halo import Halo 
 import plotly.graph_objects as go
 import plotly.io as pio
 
 cpus = os.cpu_count() - 1
 pool = Pool(cpus)
 
-#os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
+os.environ['PHENIX'] = '/dls_sw/apps/phenix/1.20.1/phenix-1.20.1-4487'
+subprocess.run(["module", "load", "phenix"])
+try:
+	subprocess.run(["phenix.about"])
+except:
+	print("Cannon find Phenix installation. Try to run module load phenix")
 
 mtzIn = input("File location for MTZ: ")
 pdbIn = input("File location for PDB: ")
-#seqIn = input("File location for SEQ: ")
 projIn = input("Name of project: ")
+genMonomerLib = input("Do you have ligands in the PDB file? (y/n) ").lower()
+if genMonomerLib == "y":
+	print("Generating monomer library, this should only take a few minutes...\n")
+	subprocess.run(["phenix.ready_set", f"{pdbIn}"])
+	pdbInBase, pdbInExt = pdbIn.rsplit('.', 1)
+	pdbInBase = os.path.basename(pdbInBase)
+	ligandIn = str(pdbInBase + "ligands.cif")
+else:
+	ligandIn = str(None)
 # effIn = input("File location for EFF: ")
 # pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
 # seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
@@ -31,26 +45,16 @@ projIn = input("Name of project: ")
 # mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
 
 elementsToTry = input("Which elements to try, comma separated: ")
-#elementsToTry = "K, Cl, Ca, Xe"
 elements = [x.strip() for x in elementsToTry.split(',')]
 
-# Create mtz object storing information
 mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
 millerArray = mtzInfo.as_miller_arrays()
 mtzInfo.file_content()
 mtzobj = iotbx.mtz.object(mtzIn)
-
-# Extract space group
 space_group = mtzobj.space_group_name()
-# Create dictionary matching concatenated space groups with correct spacing ???
-
-# Extract unit cell params
 csym = mtzobj.crystals()[0].crystal_symmetry()
 unit_cell = csym.unit_cell()
-# Remove list characters
 unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
-
-# Extract WV
 mtz = gemmi.read_mtz_file(mtzIn)
 WV = (mtz.dataset(1).wavelength)
   
@@ -176,8 +180,10 @@ def runBPos(pdbIn, elementIn):
             label = FreeR_flag  
             test_flag_value = 0  
           }}  
-        }}  
-        }}  
+        }}    
+		    monomers {{
+		      file_name = {ligandIn}
+        }}
       }}  
       output {{  
         prefix = """{projIn}_bpos_{str(elementIn)}"""   
@@ -250,7 +256,10 @@ def runFdp(elementIn, fPrime, toFDPRefine):
             label = FreeR_flag  
             test_flag_value = 0  
           }}  
-        }}  
+        }}
+        monomers {{
+		      file_name = {ligandIn}
+        }}
       }}  
       output {{  
         prefix = """{projIn}_fdp_{elementIn}"""  
@@ -308,19 +317,3 @@ if __name__ == "__main__":
 		scrapedData.append(scrapeLastAnomalousGroupData(logFile, theoreticalFDP))
 	print(scrapedData)
 	makeTable(scrapedData)
-
-	
-
-
-
-
-
-
-# with Halo(text="\nRunning B pos refinement", spinner="dots"):
-#     run_phenix_refine("bposEffParam.eff")
-
-# fDPRunList = []
-
-
-# with Halo("\nRunning f'' refinement", spinner="dots"):
-# 	pool.starmap(run_phenix_refine, fDPRunList)
