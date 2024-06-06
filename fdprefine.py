@@ -1,5 +1,4 @@
 #!/dls/science/groups/i23/pyenvs/tihana_conda/bin/python
-#set tab size to 2
 import os
 import re
 from iotbx import reflection_file_reader 
