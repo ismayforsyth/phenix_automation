@@ -16,8 +16,8 @@ import plotly.io as pio
 from multiprocessing import Pool
 class refinefdoubleprime():
   def __init__(self):
-    cpus = os.cpu_count() - 1
-    pool = Pool(cpus)
+    self.cpus = os.cpu_count() - 1
+    self.pool = Pool(self.cpus)
 
     try:
       subprocess.run(["phenix.about"])
@@ -27,42 +27,37 @@ class refinefdoubleprime():
 
     mtzIn = input("File location for MTZ: ")
     pdbIn = input("File location for PDB: ")
-    projIn = input("Name of project: ")
+    self.projIn = input("Name of project: ")
     genMonomerLib = input("Do you have ligands in the PDB file? (y/n) ").lower()
     if genMonomerLib == "y":
       print("Generating monomer library, this should only take a few minutes...\n")
       subprocess.run(["phenix.ready_set", f"{pdbIn}"])
       pdbInBase, pdbInExt = pdbIn.rsplit('.', 1)
       pdbInBase = os.path.basename(pdbInBase)
-      ligandIn = str(pdbInBase + ".ligands.cif")
+      self.ligandIn = str(pdbInBase + ".ligands.cif")
     else:
-      ligandIn = str(None)
-    # effIn = input("File location for EFF: ")
-    # pdbIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Phenix4/phaser_1/Lysozyme-FinalLSvsnLS_phaser.1.pdb"
-    # seqIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/Lysozyme.seq"
-    # projIn = "Lysozyme"
-    # mtzIn = "/dls/i23/data/2023/cm33851-4/processing/Ismay/Lysozyme/New_data_Clonly/LS/8keV/DataFiles/AUTOMATIC_DEFAULT_free.mtz"
+      self.ligandIn = str(None)
 
     elementsToTry = input("Which elements to try, comma separated: ")
-    elements = [x.strip() for x in elementsToTry.split(',')]
+    self.elements = [x.strip() for x in elementsToTry.split(',')]
 
     mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
     millerArray = mtzInfo.as_miller_arrays()
     mtzInfo.file_content()
     mtzobj = iotbx.mtz.object(mtzIn)
-    space_group = mtzobj.space_group_name()
+    self.space_group = mtzobj.space_group_name()
     csym = mtzobj.crystals()[0].crystal_symmetry()
     unit_cell = csym.unit_cell()
-    unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
-    mtz = gemmi.read_mtz_file(mtzIn)
-    WV = (mtz.dataset(1).wavelength)
+    self.unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
+    self.mtz = gemmi.read_mtz_file(mtzIn)
+    self.WV = (self.mtz.dataset(1).wavelength)
     
-  def wavelength_to_eV(wavelength):
+  def wavelength_to_eV(self, wavelength):
     h = 6.62607015e-34
     c = 2.99792458e8
     eV = 1.602176634e-19
-    energyeV = (h * c) / (float(wavelength) * 1e-10) / eV
-    return energyeV
+    self.energyeV = (h * c) / (float(wavelength) * 1e-10) / eV
+    return self.energyeV
 
   def lookup_fprime(energy, element):
     lookupPath = os.path.join("lookup", f"{element}.dat")
@@ -77,7 +72,7 @@ class refinefdoubleprime():
                 closestValues = (fPrime, fDoublePrime)
     return closestValues
 
-  def change_elem(pdbPath, elements):
+  def change_elem(self, pdbPath, elements):
     pdbInBase, pdbInExt = pdbPath.rsplit('.', 1)
     pdbInBase = os.path.basename(pdbInBase)
     print(f"Running on {str(pdbInBase)}")
@@ -119,10 +114,10 @@ class refinefdoubleprime():
 
     return pdbList
 
-  def run_phenix_refine(effFile):
+  def run_phenix_refine(self, effFile):
     subprocess.run(["phenix.refine", effFile, "2>&1", "/dev/null"]) 
   
-  def scrapeLastAnomalousGroupData(log_file_path, theoreticalFDP):
+  def scrapeLastAnomalousGroupData(self, log_file_path, theoreticalFDP):
     with open(log_file_path, 'r') as file:
       content = file.read()
 
@@ -143,7 +138,7 @@ class refinefdoubleprime():
 
     return data
 
-  def makeTable(scrapedData):
+  def makeTable(self, scrapedData):
     header = ['Chain', 'ResidID', 'Element', 'Refined FDP', "Theoretical FDP", "Absolute Difference"]
     flattenedData = [item for sublist in scrapedData for item in sublist]
     tableData = list(map(list, zip(*flattenedData)))
@@ -156,37 +151,37 @@ class refinefdoubleprime():
                 fill_color='lavender',
                 align='left'))
     ])
-    pio.write_html(fig, f'{projIn}.html')
+    pio.write_html(fig, f'{self.projIn}.html')
 
 
   # Create bpos eff file
-  def runBPos(pdbIn, elementIn):
+  def runBPos(self, pdbIn, elementIn):
     with open(f'bposEffParam_{elementIn}.eff', 'w') as file:
       file.write(f'''refinement {{
       crystal_symmetry {{  
-        unit_cell = {unit_cell_strip}
-        space_group = {space_group}
+        unit_cell = {self.unit_cell_strip}
+        space_group = {self.space_group}
       }}
       input {{  
         pdb {{  
           file_name = "{pdbIn}"  
         }}  
         xray_data {{  
-          file_name = "{mtzIn}"
+          file_name = "{self.mtzIn}"
           labels = IMEAN,SIGIMEAN  
           r_free_flags {{  
-            file_name = "{mtzIn}"
+            file_name = "{self.mtzIn}"
             label = FreeR_flag  
             test_flag_value = 0  
           }}  
         }}    
 		    monomers {{
-		      file_name = {ligandIn}
+		      file_name = {self.ligandIn}
         }}
       }}  
       output {{  
-        prefix = """{projIn}_bpos_{str(elementIn)}"""   
-        job_title = """{projIn}"""  
+        prefix = """{self.projIn}_bpos_{str(elementIn)}"""   
+        job_title = """{self.projIn}"""  
         serial_format = "%d"
         write_def_file = False  
       }}  
@@ -219,14 +214,14 @@ class refinefdoubleprime():
       }}  
       main {{  
         number_of_macro_cycles = 5  
-        wavelength = {WV}
-        nproc = {cpus}
+        wavelength = {self.WV}
+        nproc = {self.cpus}
       }}   
       }}''')
 
     subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
 
-  def runFdp(elementIn, fPrime, toFDPRefine):
+  def runFdp(self, elementIn, fPrime, toFDPRefine):
     anomalousScatterersStr = "anomalous_scatterers {\n"
     for elemID, chainID, residID in toFDPRefine:
         groupStr = f"""          group {{
@@ -240,29 +235,29 @@ class refinefdoubleprime():
     with open(f'fdpEffParam_{elementIn}.eff', 'w') as file:
       file.write(f'''refinement {{  
 			crystal_symmetry {{
-        unit_cell = {unit_cell_strip}
-        space_group = {space_group}
+        unit_cell = {self.unit_cell_strip}
+        space_group = {self.space_group}
       }}  
       input {{  
         pdb {{  
-          file_name = "{projIn}_bpos_{elementIn}_1.pdb"  
+          file_name = "{self.projIn}_bpos_{elementIn}_1.pdb"  
         }}  
         xray_data {{  
-          file_name = "{mtzIn}"
+          file_name = "{self.mtzIn}"
           labels = I(+),SIGI(+),I(-),SIGI(-)
           r_free_flags {{  
-            file_name = "{mtzIn}"
+            file_name = "{self.mtzIn}"
             label = FreeR_flag  
             test_flag_value = 0  
           }}  
         }}
         monomers {{
-		      file_name = {ligandIn}
+		      file_name = {self.ligandIn}
         }}
       }}  
       output {{  
-        prefix = """{projIn}_fdp_{elementIn}"""  
-        job_title = """{projIn}_{elementIn}"""  
+        prefix = """{self.projIn}_fdp_{elementIn}"""  
+        job_title = """{self.projIn}_{elementIn}"""  
         serial_format = "%d"
         write_def_file = False  
       }}  
@@ -296,7 +291,7 @@ class refinefdoubleprime():
       }}
       main {{  
         number_of_macro_cycles = 5  
-        wavelength = {WV}
+        wavelength = {self.WV}
       }}  
       }}''')
     
