@@ -7,9 +7,6 @@ import iotbx
 import gemmi
 import subprocess 
 import copy 
-import sys
-from tqdm import tqdm
-from halo import Halo 
 import plotly.graph_objects as go
 import plotly.io as pio
 
