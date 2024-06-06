@@ -126,7 +126,7 @@ class refinefdoubleprime():
     )
 
     matches = pattern.findall(content_after_macro_cycle)
-    data = [(m[0], int(m[1]), m[2], float(m[3]), float(theoreticalFDP), float(abs(float(theoreticalFDP) - (float(m[3]))))) for m in matches]
+    data = [(m[0], int(m[1]), m[2], float(m[3]), float(self.closestValues[1]), float(abs(float(self.closestValues[1]) - (float(m[3]))))) for m in matches]
 
     self.scrapedData.append(data)
 
