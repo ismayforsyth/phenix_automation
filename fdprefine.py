@@ -21,7 +21,7 @@ class refinefdoubleprime():
     except:
       print("Cannot find Phenix installation. Try to run module load phenix")
 
-    mtzIn = input("File location for MTZ: ")
+    self.mtzIn = input("File location for MTZ: ")
     self.pdbIn = input("File location for PDB: ")
     self.projIn = input("Name of project: ")
     genMonomerLib = input("Do you have ligands in the PDB file? (y/n) ").lower()
@@ -37,15 +37,14 @@ class refinefdoubleprime():
     elementsToTry = input("Which elements to try, comma separated: ")
     self.elements = [x.strip() for x in elementsToTry.split(',')]
 
-    mtzInfo = reflection_file_reader.any_reflection_file(mtzIn)
-    millerArray = mtzInfo.as_miller_arrays()
+    mtzInfo = reflection_file_reader.any_reflection_file(self.mtzIn)
     mtzInfo.file_content()
-    mtzobj = iotbx.mtz.object(mtzIn)
+    mtzobj = iotbx.mtz.object(self.mtzIn)
     self.space_group = mtzobj.space_group_name()
     csym = mtzobj.crystals()[0].crystal_symmetry()
     unit_cell = csym.unit_cell()
     self.unit_cell_strip = (str(unit_cell)).strip('()').replace(',', '')
-    self.mtz = gemmi.read_mtz_file(mtzIn)
+    self.mtz = gemmi.read_mtz_file(self.mtzIn)
     self.WV = (self.mtz.dataset(1).wavelength)
     self.scrapedData = []
     
@@ -63,7 +62,7 @@ class refinefdoubleprime():
         for line in lookupFile:
             parts = line.split()
             currentEnergy, fPrime, fDoublePrime = map(float, parts)
-            if closestEnergy is None or abs(self.energy - currentEnergy) < abs(self.energy - closestEnergy):
+            if closestEnergy is None or abs(self.energyeV - currentEnergy) < abs(self.energyeV - closestEnergy):
                 closestEnergy = currentEnergy
                 self.closestValues = (fPrime, fDoublePrime)
 
@@ -293,7 +292,7 @@ if __name__ == "__main__":
   run.change_elem()
   run.wavelength_to_eV()
   for pdb, ele, tfdpr in run.pdbList:
-    run.lookup_fprime()
+    run.lookup_fprime(ele)
     run.runBPos(pdb, ele)
     run.runFdp(ele, tfdpr)
     run.scrapeLastAnomalousGroupData(ele)
