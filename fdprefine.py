@@ -8,12 +8,9 @@ import subprocess
 import copy 
 import plotly.graph_objects as go
 import plotly.io as pio
-
-from multiprocessing import Pool
 class refinefdoubleprime():
   def __init__(self):
     self.cpus = os.cpu_count() - 1
-    self.pool = Pool(self.cpus)
 
     try:
       subprocess.run(["phenix.about"])
