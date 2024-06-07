@@ -4,6 +4,7 @@
 *.eff
 *.pdb
 *.log
+*.mmcif
 *.pdb.gz
 0-coot-history.py
 0-coot-history.scm
