@@ -15,11 +15,12 @@ class refinefdoubleprime():
   def __init__(self):
     self.cpus = os.cpu_count() - 1
 
-    try:
-      subprocess.run(["phenix.about"])
-      print("Found Phenix installation")
-    except:
-      print("Cannot find Phenix installation. Try to run module load phenix")
+    ### should load phenix as part of the setup script, if it doesn't uncomment below to include a check
+    # try:
+    #   subprocess.run(["phenix.about"])
+    #   print("Found Phenix installation")
+    # except:
+    #   print("Cannot find Phenix installation. Try to run module load phenix")
 
     self.mtzIn = input("File location for MTZ: ")
     self.pdbIn = input("File location for PDB: ")
