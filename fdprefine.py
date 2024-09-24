@@ -8,6 +8,9 @@ import subprocess
 import copy 
 import plotly.graph_objects as go
 import plotly.io as pio
+
+lookup_path = "/dls/science/groups/i23/scripts/chris/phenix_automation/lookup"
+cwd = os.getcwd()
 class refinefdoubleprime():
   def __init__(self):
     self.cpus = os.cpu_count() - 1
@@ -52,7 +55,7 @@ class refinefdoubleprime():
     self.energyeV = (h * c) / (float(self.WV) * 1e-10) / eV
 
   def lookup_fprime(self, element):
-    lookupPath = os.path.join("lookup", f"{element}.dat")
+    lookupPath = os.path.join(lookup_path, f"{element}.dat")
     closestEnergy = None
     self.closestValues = None
     with open(lookupPath, 'r') as lookupFile:
@@ -75,7 +78,7 @@ class refinefdoubleprime():
 
     toChange = []
     for line in pdbLinesWrite:
-      if line.startswith("HETATM"):
+      if line.startswith("HETATM") and " HOH" not in line:
         print(line.strip())
         changeHETATM = input("Would you like to run refinement on this HETATM? ")
         if changeHETATM.lower() in ('y', 'yes'):
