@@ -308,7 +308,6 @@ def runParallel(args):
     closestValues = run.lookup_fprime(ele)
     run.runBPos(pdbIn=pdb, elementIn=ele)
     run.runFdp(elementIn=ele, toFDPRefine=tfdpr, closestValues=closestValues)
-    #run.scrapeLastAnomalousGroupData(ele=ele, closestValues=closestValues)
   except Exception as e:
     print(f"Error processing {pdb}: {e}")
 
