@@ -33,11 +33,13 @@ class refinefdoubleprime():
     genMonomerLib = input("Do you have ligands in the PDB file? (y/n) ").lower()
     #genMonomerLib = "n"
     if genMonomerLib == "y":
-      print("Generating monomer library, this should only take a few minutes...\n")
-      subprocess.run(["phenix.ready_set", f"{self.pdbIn}"])
-      pdbInBase, pdbInExt = self.pdbIn.rsplit('.', 1)
-      pdbInBase = os.path.basename(pdbInBase)
-      self.ligandIn = str(pdbInBase + ".ligands.cif")
+      with Halo(text="Generating monomer library, this should only take a few minutes...", spinner="toggle"):
+        logFile = f"monomerlib_output.log"
+        with open(logFile, 'a') as log:    
+          subprocess.run(["phenix.ready_set", f"{self.pdbIn}"], stdout=log, stderr=log)
+          pdbInBase, pdbInExt = self.pdbIn.rsplit('.', 1)
+          pdbInBase = os.path.basename(pdbInBase)
+          self.ligandIn = str(pdbInBase + ".ligands.cif")
     else:
       self.ligandIn = str(None)
 
