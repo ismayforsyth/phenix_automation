@@ -42,6 +42,8 @@ class refinefdoubleprime():
           self.ligandIn = str(pdbInBase + ".ligands.cif")
     else:
       self.ligandIn = str(None)
+      self.toignore = ("HOH", "BOG", "IXX", "GOL", "PEG")
+
 
     elementsToTry = input("Which elements to try, comma separated: ")
     #elementsToTry = "Ca, Cl, Fe, K, Mg, Mn, Na, Ni, P, S"
@@ -90,7 +92,7 @@ class refinefdoubleprime():
 
     toChange = []
     for line in pdbLinesWrite:
-      if line.startswith("HETATM") and " HOH" not in line:
+      if line.startswith("HETATM") and not any(value in line for value in self.toignore):
         print(line.strip())
         changeHETATM = input("Would you like to run refinement on this HETATM? ")
         if changeHETATM.lower() in ('y', 'yes'):
