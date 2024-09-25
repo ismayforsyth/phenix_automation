@@ -8,33 +8,45 @@ import subprocess
 import copy 
 import plotly.graph_objects as go
 import plotly.io as pio
+from multiprocessing import Pool
+from halo import Halo
 
 lookup_path = "/dls/science/groups/i23/scripts/chris/phenix_automation/lookup"
 cwd = os.getcwd()
 class refinefdoubleprime():
   def __init__(self):
     self.cpus = os.cpu_count() - 1
-
-    try:
-      subprocess.run(["phenix.about"])
-      print("Found Phenix installation")
-    except:
-      print("Cannot find Phenix installation. Try to run module load phenix")
+    
+    ### should load phenix as part of the setup script, if it doesn't uncomment below to include a check
+    # try:
+    #   subprocess.run(["phenix.about"])
+    #   print("Found Phenix installation")
+    # except:
+    #   print("Cannot find Phenix installation. Try to run module load phenix")
 
     self.mtzIn = input("File location for MTZ: ")
+    #self.mtzIn = "102446901_nr27313v335_xlys313keV100umV1p5MGy1_free.mtz"
     self.pdbIn = input("File location for PDB: ")
+    #self.pdbIn = "1lz8.pdb"
     self.projIn = input("Name of project: ")
+    #self.projIn = "lysi04"
     genMonomerLib = input("Do you have ligands in the PDB file? (y/n) ").lower()
+    #genMonomerLib = "n"
     if genMonomerLib == "y":
-      print("Generating monomer library, this should only take a few minutes...\n")
-      subprocess.run(["phenix.ready_set", f"{self.pdbIn}"])
-      pdbInBase, pdbInExt = self.pdbIn.rsplit('.', 1)
-      pdbInBase = os.path.basename(pdbInBase)
-      self.ligandIn = str(pdbInBase + ".ligands.cif")
+      with Halo(text="Generating monomer library, this should only take a few minutes...", spinner="toggle"):
+        logFile = f"monomerlib_output.log"
+        with open(logFile, 'a') as log:    
+          subprocess.run(["phenix.ready_set", f"{self.pdbIn}"], stdout=log, stderr=log)
+          pdbInBase, pdbInExt = self.pdbIn.rsplit('.', 1)
+          pdbInBase = os.path.basename(pdbInBase)
+          self.ligandIn = str(pdbInBase + ".ligands.cif")
     else:
       self.ligandIn = str(None)
+      self.toignore = ("HOH", "BOG", "IXX", "GOL", "PEG")
+
 
     elementsToTry = input("Which elements to try, comma separated: ")
+    #elementsToTry = "Ca, Cl, Fe, K, Mg, Mn, Na, Ni, P, S"
     self.elements = [x.strip() for x in elementsToTry.split(',')]
 
     mtzInfo = reflection_file_reader.any_reflection_file(self.mtzIn)
@@ -47,6 +59,7 @@ class refinefdoubleprime():
     self.mtz = gemmi.read_mtz_file(self.mtzIn)
     self.WV = (self.mtz.dataset(1).wavelength)
     self.scrapedData = []
+    self.mtz = None
     
   def wavelength_to_eV(self):
     h = 6.62607015e-34
@@ -57,14 +70,15 @@ class refinefdoubleprime():
   def lookup_fprime(self, element):
     lookupPath = os.path.join(lookup_path, f"{element}.dat")
     closestEnergy = None
-    self.closestValues = None
+    closestValues = None
     with open(lookupPath, 'r') as lookupFile:
         for line in lookupFile:
             parts = line.split()
             currentEnergy, fPrime, fDoublePrime = map(float, parts)
             if closestEnergy is None or abs(self.energyeV - currentEnergy) < abs(self.energyeV - closestEnergy):
                 closestEnergy = currentEnergy
-                self.closestValues = (fPrime, fDoublePrime)
+                closestValues = (fPrime, fDoublePrime)
+    return closestValues
 
   def change_elem(self):
     pdbInBase, pdbInExt = self.pdbIn.rsplit('.', 1)
@@ -78,7 +92,7 @@ class refinefdoubleprime():
 
     toChange = []
     for line in pdbLinesWrite:
-      if line.startswith("HETATM") and " HOH" not in line:
+      if line.startswith("HETATM") and not any(value in line for value in self.toignore):
         print(line.strip())
         changeHETATM = input("Would you like to run refinement on this HETATM? ")
         if changeHETATM.lower() in ('y', 'yes'):
@@ -106,7 +120,7 @@ class refinefdoubleprime():
           pdbOut.write(line)
         self.pdbList.append((f"{pdbInBase}_{element}.{pdbInExt}", element, toFDPRefine))
   
-  def scrapeLastAnomalousGroupData(self, ele):
+  def scrapeLastAnomalousGroupData(self, ele, closestValues):
     log_file_path = (f'{self.projIn}_fdp_{ele}_1.log')
     with open(log_file_path, 'r') as file:
       content = file.read()
@@ -124,7 +138,7 @@ class refinefdoubleprime():
     )
 
     matches = pattern.findall(content_after_macro_cycle)
-    data = [(m[0], int(m[1]), m[2], float(m[3]), float(self.closestValues[1]), float(abs(float(self.closestValues[1]) - (float(m[3]))))) for m in matches]
+    data = [(m[0], int(m[1]), m[2], float(m[3]), float(closestValues[1]), float(abs(float(closestValues[1]) - (float(m[3]))))) for m in matches]
 
     self.scrapedData.append(data)
 
@@ -209,14 +223,16 @@ class refinefdoubleprime():
       }}   
       }}''')
 
-    subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"])
+    logFile = f"{elementIn}_output.log"
+    with open(logFile, 'a') as log:    
+      subprocess.run(["phenix.refine", f"bposEffParam_{elementIn}.eff"], stdout=log, stderr=log)
 
-  def runFdp(self, elementIn, toFDPRefine):
+  def runFdp(self, elementIn, toFDPRefine, closestValues):
     anomalousScatterersStr = "anomalous_scatterers {\n"
     for elemID, chainID, residID in toFDPRefine:
         groupStr = f"""          group {{
               selection = chain {chainID} and resid {residID} and element {elemID}
-              f_prime = {self.closestValues[0]}
+              f_prime = {closestValues[0]}
               refine = f_prime *f_double_prime
             }}\n"""
         anomalousScatterersStr += groupStr
@@ -284,16 +300,31 @@ class refinefdoubleprime():
         wavelength = {self.WV}
       }}  
       }}''')
-    
-    subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"])      
+
+    logFile = f"{elementIn}_output.log"
+    with open(logFile, 'a') as log:
+      subprocess.run(["phenix.refine", f"fdpEffParam_{elementIn}.eff"], stdout=log, stderr=log)      
+
+
+def runParallel(args):
+  run, pdb, ele, tfdpr = args
+  try:
+    closestValues = run.lookup_fprime(ele)
+    run.runBPos(pdbIn=pdb, elementIn=ele)
+    run.runFdp(elementIn=ele, toFDPRefine=tfdpr, closestValues=closestValues)
+  except Exception as e:
+    print(f"Error processing {pdb}: {e}")
 
 if __name__ == "__main__":  
   run = refinefdoubleprime()
   run.change_elem()
   run.wavelength_to_eV()
-  for pdb, ele, tfdpr in run.pdbList:
-    run.lookup_fprime(ele)
-    run.runBPos(pdb, ele)
-    run.runFdp(ele, tfdpr)
-    run.scrapeLastAnomalousGroupData(ele)
-  run.makeTable()
+  toRun = [(run, pdb, ele, tfdpr) for pdb, ele, tfdpr in run.pdbList]
+  with Halo(text="Running phenix.refine in parallel", spinner="clock"):
+    with Pool(processes=os.cpu_count() - 1) as pool:
+      pool.map(runParallel, toRun)
+  with Halo(text="Scraping data", spinner="hearts"):
+    for _, ele, _ in run.pdbList:
+      closestValues = run.lookup_fprime(ele)
+      run.scrapeLastAnomalousGroupData(ele=ele, closestValues=closestValues)
+    run.makeTable()
